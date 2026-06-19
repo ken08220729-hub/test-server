@@ -9,71 +9,67 @@ const io = new Server(server);
 app.use(express.static("public"));
 
 let waiting = null;
-let rooms = {};
-
-// 🎯 建立房間
-function createRoom(a, b) {
-
-    const roomId = "room_" + Date.now();
-
-    rooms[roomId] = {
-        players: [a.id, b.id],
-        state: {
-            ball: { x:0, y:0, z:0 },
-            pins: [],
-            scores: {}
-        }
-    };
-
-    rooms[roomId].state.scores[a.id] = 0;
-    rooms[roomId].state.scores[b.id] = 0;
-
-    a.join(roomId);
-    b.join(roomId);
-
-    io.to(roomId).emit("room_ready", { roomId });
-
-    let count = 3;
-
-    const t = setInterval(() => {
-
-        io.to(roomId).emit("countdown", count);
-
-        count--;
-
-        if (count < 0) {
-            clearInterval(t);
-
-            io.to(roomId).emit("start_game");
-        }
-
-    }, 1000);
-}
+let online = 0;
 
 io.on("connection", (socket) => {
 
+    online++;
+    io.emit("online", online);
+
+    // 🎯 匹配
     socket.on("match", () => {
 
         if (!waiting) {
             waiting = socket;
             socket.emit("waiting");
         } else {
-            createRoom(waiting, socket);
+
+            const room = "room_" + Date.now();
+
+            const p1 = waiting;
+            const p2 = socket;
+
             waiting = null;
+
+            p1.join(room);
+            p2.join(room);
+
+            io.to(room).emit("matched", { room });
+
+            let count = 3;
+
+            const t = setInterval(() => {
+
+                io.to(room).emit("countdown", count);
+
+                count--;
+
+                if (count < 0) {
+                    clearInterval(t);
+                    io.to(room).emit("start");
+                }
+
+            }, 1000);
         }
     });
 
-    // 🎯 同步物理結果（client算完）
-    socket.on("sync_state", (data) => {
+    // 🎳 丟球同步
+    socket.on("roll", (data) => {
 
-        const roomId = Array.from(socket.rooms)[1];
-        const room = rooms[roomId];
-
+        const room = Array.from(socket.rooms)[1];
         if (!room) return;
 
-        room.state = data;
+        io.to(room).emit("sync", {
+            id: socket.id,
+            power: data.power
+        });
+    });
 
-        io.to(roomId).emit("state_update", data);
+    socket.on("disconnect", () => {
+        online--;
+        io.emit("online", online);
+
+        if (waiting === socket) waiting = null;
     });
 
 });
