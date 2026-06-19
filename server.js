@@ -6,21 +6,61 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-    cors: {
-        origin: "*"
-    }
+    cors: { origin: "*" }
 });
 
-// 提供 public 靜態檔案（很重要）
 app.use(express.static("public"));
 
 let onlinePlayers = 0;
-
-// 等待配對隊列
 let waitingPlayer = null;
-
-// 房間資料
 let rooms = {};
+
+function nextTurn(roomId) {
+
+    const room = rooms[roomId];
+    if (!room) return;
+
+    room.turnIndex++;
+
+    if (room.turnIndex >= room.players.length) {
+        room.turnIndex = 0;
+        room.round++;
+    }
+
+    if (room.round > 10) {
+
+        io.to(roomId).emit("gameOver", room.scores);
+        return;
+    }
+
+    const currentPlayer = room.players[room.turnIndex];
+
+    room.timer = 20;
+
+    io.to(roomId).emit("nextTurn", {
+        player: currentPlayer,
+        round: room.round,
+        scores: room.scores,
+        timer: room.timer
+    });
+
+    const interval = setInterval(() => {
+
+        room.timer--;
+
+        io.to(roomId).emit("timer", room.timer);
+
+        if (room.timer <= 0) {
+
+            clearInterval(interval);
+
+            room.scores[currentPlayer] += 0;
+
+            nextTurn(roomId);
+        }
+
+    }, 1000);
+}
 
 function createRoom(p1, p2) {
 
@@ -28,28 +68,20 @@ function createRoom(p1, p2) {
 
     rooms[roomId] = {
         players: [p1.id, p2.id],
-        names: {},
         scores: {
             [p1.id]: 0,
             [p2.id]: 0
         },
         round: 1,
-        maxRounds: 10
+        turnIndex: 0
     };
 
     p1.join(roomId);
     p2.join(roomId);
 
-    io.to(roomId).emit("roomStart", {
-        roomId,
-        players: [p1.id, p2.id],
-        round: 1
-    });
-
-    // 3秒倒數開始
     let count = 3;
 
-    const timer = setInterval(() => {
+    const t = setInterval(() => {
 
         io.to(roomId).emit("countdown", count);
 
@@ -57,12 +89,9 @@ function createRoom(p1, p2) {
 
         if (count < 0) {
 
-            clearInterval(timer);
+            clearInterval(t);
 
-            io.to(roomId).emit("gameStart", {
-                firstPlayer: Math.random() > 0.5 ? p1.id : p2.id
-            });
-
+            nextTurn(roomId);
         }
 
     }, 1000);
@@ -73,42 +102,33 @@ io.on("connection", (socket) => {
     onlinePlayers++;
     io.emit("onlineCount", onlinePlayers);
 
-    // 玩家設定名稱
-    socket.on("setName", (name) => {
-        socket.data.name = name;
-    });
-
-    // 配對
     socket.on("match", () => {
 
-        if (waitingPlayer === null) {
-
+        if (!waitingPlayer) {
             waitingPlayer = socket;
             socket.emit("waiting");
-
         } else {
-
-            const opponent = waitingPlayer;
+            createRoom(waitingPlayer, socket);
             waitingPlayer = null;
-
-            createRoom(opponent, socket);
         }
     });
 
-    // 投球（之後3D會用）
-    socket.on("throwBall", (data) => {
+    // 球結果（由前端算簡化碰撞）
+    socket.on("ballResult", ({ pinsDown, power }) => {
 
         const roomId = Array.from(socket.rooms)[1];
-
         if (!roomId) return;
 
-        io.to(roomId).emit("ballUpdate", {
-            id: socket.id,
-            data
-        });
+        const room = rooms[roomId];
+        if (!room) return;
+
+        room.scores[socket.id] += pinsDown;
+
+        io.to(roomId).emit("scoreUpdate", room.scores);
+
+        nextTurn(roomId);
     });
 
-    // 離線
     socket.on("disconnect", () => {
 
         onlinePlayers--;
@@ -118,9 +138,6 @@ io.on("connection", (socket) => {
             waitingPlayer = null;
         }
     });
-
 });
 
-server.listen(process.env.PORT || 3000, () => {
-    console.log("Server running");
-});
+server.listen(process.env.PORT || 3000);
