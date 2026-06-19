@@ -4,42 +4,53 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-
-const io = new Server(server, {
-    cors: { origin: "*" }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static("public"));
 
 let onlinePlayers = 0;
-let waitingPlayer = null;
+let waiting = null;
 let rooms = {};
 
+// 計算球瓶倒數（簡化物理）
+function calculatePins(power, offsetX) {
+
+    let base = Math.floor(power * 5);
+    let bias = Math.abs(offsetX) * 3;
+
+    let result = Math.max(0, Math.min(10, base - bias));
+
+    return result;
+}
+
+// 下一回合
 function nextTurn(roomId) {
 
     const room = rooms[roomId];
+
     if (!room) return;
 
-    room.turnIndex++;
+    room.turn++;
 
-    if (room.turnIndex >= room.players.length) {
-        room.turnIndex = 0;
-        room.round++;
+    if (room.turn >= room.players.length) {
+        room.turn = 0;
+        room.frame++;
     }
 
-    if (room.round > 10) {
+    if (room.frame > 10) {
 
         io.to(roomId).emit("gameOver", room.scores);
         return;
     }
 
-    const currentPlayer = room.players[room.turnIndex];
+    const pid = room.players[room.turn];
 
     room.timer = 20;
+    room.rollCount = 0;
 
-    io.to(roomId).emit("nextTurn", {
-        player: currentPlayer,
-        round: room.round,
+    io.to(roomId).emit("turn", {
+        player: pid,
+        frame: room.frame,
         scores: room.scores,
         timer: room.timer
     });
@@ -54,7 +65,7 @@ function nextTurn(roomId) {
 
             clearInterval(interval);
 
-            room.scores[currentPlayer] += 0;
+            room.scores[pid] += 0;
 
             nextTurn(roomId);
         }
@@ -62,28 +73,30 @@ function nextTurn(roomId) {
     }, 1000);
 }
 
-function createRoom(p1, p2) {
+// 建立房間
+function createRoom(a, b) {
 
-    const roomId = "room_" + Date.now();
+    const id = "room_" + Date.now();
 
-    rooms[roomId] = {
-        players: [p1.id, p2.id],
+    rooms[id] = {
+        players: [a.id, b.id],
         scores: {
-            [p1.id]: 0,
-            [p2.id]: 0
+            [a.id]: 0,
+            [b.id]: 0
         },
-        round: 1,
-        turnIndex: 0
+        frame: 1,
+        turn: 0,
+        rollCount: 0
     };
 
-    p1.join(roomId);
-    p2.join(roomId);
+    a.join(id);
+    b.join(id);
 
     let count = 3;
 
     const t = setInterval(() => {
 
-        io.to(roomId).emit("countdown", count);
+        io.to(id).emit("countdown", count);
 
         count--;
 
@@ -91,7 +104,7 @@ function createRoom(p1, p2) {
 
             clearInterval(t);
 
-            nextTurn(roomId);
+            nextTurn(id);
         }
 
     }, 1000);
@@ -104,17 +117,17 @@ io.on("connection", (socket) => {
 
     socket.on("match", () => {
 
-        if (!waitingPlayer) {
-            waitingPlayer = socket;
+        if (!waiting) {
+            waiting = socket;
             socket.emit("waiting");
         } else {
-            createRoom(waitingPlayer, socket);
-            waitingPlayer = null;
+            createRoom(waiting, socket);
+            waiting = null;
         }
     });
 
-    // 球結果（由前端算簡化碰撞）
-    socket.on("ballResult", ({ pinsDown, power }) => {
+    // 丟球結果
+    socket.on("roll", ({ power, offsetX }) => {
 
         const roomId = Array.from(socket.rooms)[1];
         if (!roomId) return;
@@ -122,11 +135,24 @@ io.on("connection", (socket) => {
         const room = rooms[roomId];
         if (!room) return;
 
-        room.scores[socket.id] += pinsDown;
+        const pins = calculatePins(power, offsetX);
 
-        io.to(roomId).emit("scoreUpdate", room.scores);
+        room.scores[socket.id] += pins;
 
-        nextTurn(roomId);
+        let msg = "投球 " + pins + " 瓶";
+
+        if (pins === 10) msg = "STRIKE！🔥";
+
+        io.to(roomId).emit("rollResult", {
+            player: socket.id,
+            pins,
+            scores: room.scores,
+            msg
+        });
+
+        if (pins === 10) {
+            nextTurn(roomId);
+        }
     });
 
     socket.on("disconnect", () => {
@@ -134,10 +160,9 @@ io.on("connection", (socket) => {
         onlinePlayers--;
         io.emit("onlineCount", onlinePlayers);
 
-        if (waitingPlayer === socket) {
-            waitingPlayer = null;
-        }
+        if (waiting === socket) waiting = null;
     });
+
 });
 
 server.listen(process.env.PORT || 3000);
