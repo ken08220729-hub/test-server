@@ -1,30 +1,82 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh-TW">
+
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <title>Online Bowling</title>
 
 <style>
-body { margin:0; overflow:hidden; background:#0b1320; }
+body {
+    margin: 0;
+    overflow: hidden;
+    background: #0b1320;
+    font-family: sans-serif;
+    color: white;
+}
+
 #ui {
-    position:absolute;
-    top:10px;
-    left:10px;
-    color:white;
-    font-family:sans-serif;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+}
+
+#menu {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: #0b1320;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 20;
+}
+
+button {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 10px;
+    background: #4f7cff;
+    color: white;
+    font-size: 16px;
+}
+
+#countdown {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    display: none;
+    justify-content: center;
+    align-items: center;
+    font-size: 120px;
+    z-index: 30;
 }
 </style>
+
 </head>
 
 <body>
 
-<div id="ui">
-<button onclick="match()">MATCH</button>
-<div id="status">loading...</div>
+<div id="menu">
+    <h1>🎳 Bowling Online</h1>
+    <button onclick="match()">開始匹配</button>
+    <div id="status">等待連線</div>
 </div>
 
+<div id="ui">
+👥 在線：<span id="online">0</span><br>
+⏱ 狀態：<span id="state">-</span>
+</div>
+
+<div id="countdown"></div>
+
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script src="game.js" type="module"></script>
+
+<!-- ✔ r160（修正版本重點） -->
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script src="game.js"></script>
 
 </body>
 </html>
