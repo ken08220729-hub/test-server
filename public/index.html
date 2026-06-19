@@ -1,45 +1,30 @@
 <!DOCTYPE html>
 <html>
-
 <head>
 <meta charset="utf-8">
-<title>3D Bowling</title>
+<title>Online Bowling</title>
 
 <style>
-body { margin:0; overflow:hidden; background:#0b1320; color:white; font-family:sans-serif; }
-#menu {
-    position:absolute; width:100%; height:100%;
-    display:flex; flex-direction:column;
-    justify-content:center; align-items:center;
-    background:#0b1320;
-}
+body { margin:0; overflow:hidden; background:#0b1320; }
 #ui {
-    position:absolute; top:10px; left:10px;
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:white;
+    font-family:sans-serif;
 }
-input,button { padding:10px; font-size:16px; }
-canvas { display:block; }
 </style>
 </head>
 
 <body>
 
-<div id="menu">
-    <h1>🎳 Bowling Online</h1>
-    <input id="name" placeholder="名字">
-    <button onclick="match()">匹配</button>
-    <div id="status">等待中...</div>
-</div>
-
 <div id="ui">
-    👥 在線：<span id="online">0</span><br>
-    🕒 時間：<span id="timer">20</span><br>
-    📊 分數：<span id="score">0</span>
+<button onclick="match()">MATCH</button>
+<div id="status">loading...</div>
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
-
-<script src="game.js"></script>
+<script src="game.js" type="module"></script>
 
 </body>
 </html>
