@@ -11,23 +11,38 @@ const io = new Server(server, {
     }
 });
 
-// 在線人數
+// 在線玩家數
 let onlinePlayers = 0;
 
-// 暫存出拳
+// 本局出拳資料
 let players = {};
+
+// 更新遊戲狀態
+function updateStatus() {
+
+    if (onlinePlayers < 2) {
+
+        io.emit("status", "等待玩家加入...");
+
+    } else {
+
+        io.emit("status", "請出拳");
+
+    }
+
+}
 
 io.on("connection", (socket) => {
 
     console.log("玩家連線:", socket.id);
 
-    // 在線人數+1
     onlinePlayers++;
 
-    // 通知所有玩家
     io.emit("onlineCount", onlinePlayers);
 
-    // 收到玩家出拳
+    updateStatus();
+
+    // 玩家出拳
     socket.on("choice", (choice) => {
 
         players[socket.id] = choice;
@@ -36,7 +51,7 @@ io.on("connection", (socket) => {
 
         const ids = Object.keys(players);
 
-        // 兩人都出拳後判定
+        // 兩人都出拳
         if (ids.length >= 2) {
 
             const p1 = players[ids[0]];
@@ -48,7 +63,8 @@ io.on("connection", (socket) => {
 
                 result = "平手";
 
-            } else if (
+            }
+            else if (
                 (p1 === "石頭" && p2 === "剪刀") ||
                 (p1 === "剪刀" && p2 === "布") ||
                 (p1 === "布" && p2 === "石頭")
@@ -56,7 +72,8 @@ io.on("connection", (socket) => {
 
                 result = "玩家1獲勝";
 
-            } else {
+            }
+            else {
 
                 result = "玩家2獲勝";
 
@@ -68,8 +85,15 @@ io.on("connection", (socket) => {
                 result
             });
 
-            // 清空本局資料
+            // 清空資料準備下一局
             players = {};
+
+            setTimeout(() => {
+
+                updateStatus();
+
+            }, 3000);
+
         }
 
     });
@@ -89,13 +113,16 @@ io.on("connection", (socket) => {
 
         io.emit("onlineCount", onlinePlayers);
 
+        updateStatus();
+
     });
 
 });
 
-// Render 使用 PORT
 const PORT = process.env.PORT || 3000;
 
 server.listen(PORT, () => {
+
     console.log("伺服器啟動成功 Port:", PORT);
+
 });
