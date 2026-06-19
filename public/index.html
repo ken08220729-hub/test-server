@@ -3,71 +3,37 @@
 
 <head>
 <meta charset="utf-8">
-<title>3D Bowling Online</title>
+<title>3D Bowling</title>
 
 <style>
-body {
-    margin: 0;
-    overflow: hidden;
-    font-family: sans-serif;
-    background: #0b1320;
-    color: white;
-}
-
-#ui {
-    position: absolute;
-    top: 10px;
-    left: 10px;
-    z-index: 10;
-}
-
+body { margin:0; overflow:hidden; background:#0b1320; color:white; font-family:sans-serif; }
 #menu {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    background: #0b1320;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    z-index: 20;
+    position:absolute; width:100%; height:100%;
+    display:flex; flex-direction:column;
+    justify-content:center; align-items:center;
+    background:#0b1320;
 }
-
-input {
-    padding: 10px;
-    font-size: 18px;
-    margin: 10px;
+#ui {
+    position:absolute; top:10px; left:10px;
 }
-
-button {
-    padding: 10px 20px;
-    font-size: 18px;
-    cursor: pointer;
-}
-
-#status {
-    margin-top: 10px;
-}
-
-canvas {
-    display: block;
-}
+input,button { padding:10px; font-size:16px; }
+canvas { display:block; }
 </style>
 </head>
 
 <body>
 
 <div id="menu">
-    <h1>3D Bowling</h1>
-    <input id="name" placeholder="輸入名字">
-    <button onclick="startMatch()">開始匹配</button>
+    <h1>🎳 Bowling Online</h1>
+    <input id="name" placeholder="名字">
+    <button onclick="match()">匹配</button>
     <div id="status">等待中...</div>
 </div>
 
 <div id="ui">
-    👥 在線：<span id="online">0</span>
-    <br>
-    <span id="info"></span>
+    👥 在線：<span id="online">0</span><br>
+    🕒 時間：<span id="timer">20</span><br>
+    📊 分數：<span id="score">0</span>
 </div>
 
 <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
