@@ -1,28 +1,34 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
 const app = express();
-
-app.use(express.json());
-
-app.use((req, res, next) => {
-    res.header("Access-Control-Allow-Origin", "*");
-    res.header("Access-Control-Allow-Headers", "*");
-    next();
+const server = http.createServer(app);
+const io = new Server(server, {
+    cors: {
+        origin: "*"
+    }
 });
 
 let count = 0;
 
-app.get("/", (req, res) => {
-    res.send("伺服器正常");
+io.on("connection", (socket) => {
+    console.log("玩家連線:", socket.id);
+
+    // 進來先送目前數字
+    socket.emit("update", count);
+
+    // 玩家按 +1
+    socket.on("add", () => {
+        count++;
+        io.emit("update", count); // 全部同步
+    });
+
+    socket.on("disconnect", () => {
+        console.log("離開:", socket.id);
+    });
 });
 
-app.get("/count", (req, res) => {
-    res.json({ count });
+server.listen(process.env.PORT || 3000, () => {
+    console.log("Server running");
 });
-
-app.post("/add", (req, res) => {
-    count++;
-    res.json({ count });
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT);
