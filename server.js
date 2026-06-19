@@ -11,118 +11,116 @@ const io = new Server(server, {
     }
 });
 
-// 在線玩家數
+// 提供 public 靜態檔案（很重要）
+app.use(express.static("public"));
+
 let onlinePlayers = 0;
 
-// 本局出拳資料
-let players = {};
+// 等待配對隊列
+let waitingPlayer = null;
 
-// 更新遊戲狀態
-function updateStatus() {
+// 房間資料
+let rooms = {};
 
-    if (onlinePlayers < 2) {
+function createRoom(p1, p2) {
 
-        io.emit("status", "等待玩家加入...");
+    const roomId = "room_" + Date.now();
 
-    } else {
+    rooms[roomId] = {
+        players: [p1.id, p2.id],
+        names: {},
+        scores: {
+            [p1.id]: 0,
+            [p2.id]: 0
+        },
+        round: 1,
+        maxRounds: 10
+    };
 
-        io.emit("status", "請出拳");
+    p1.join(roomId);
+    p2.join(roomId);
 
-    }
+    io.to(roomId).emit("roomStart", {
+        roomId,
+        players: [p1.id, p2.id],
+        round: 1
+    });
 
+    // 3秒倒數開始
+    let count = 3;
+
+    const timer = setInterval(() => {
+
+        io.to(roomId).emit("countdown", count);
+
+        count--;
+
+        if (count < 0) {
+
+            clearInterval(timer);
+
+            io.to(roomId).emit("gameStart", {
+                firstPlayer: Math.random() > 0.5 ? p1.id : p2.id
+            });
+
+        }
+
+    }, 1000);
 }
 
 io.on("connection", (socket) => {
 
-    console.log("玩家連線:", socket.id);
-
     onlinePlayers++;
-
     io.emit("onlineCount", onlinePlayers);
 
-    updateStatus();
-
-    // 玩家出拳
-    socket.on("choice", (choice) => {
-
-        players[socket.id] = choice;
-
-        console.log(socket.id + " 出了 " + choice);
-
-        const ids = Object.keys(players);
-
-        // 兩人都出拳
-        if (ids.length >= 2) {
-
-            const p1 = players[ids[0]];
-            const p2 = players[ids[1]];
-
-            let result = "";
-
-            if (p1 === p2) {
-
-                result = "平手";
-
-            }
-            else if (
-                (p1 === "石頭" && p2 === "剪刀") ||
-                (p1 === "剪刀" && p2 === "布") ||
-                (p1 === "布" && p2 === "石頭")
-            ) {
-
-                result = "玩家1獲勝";
-
-            }
-            else {
-
-                result = "玩家2獲勝";
-
-            }
-
-            io.emit("result", {
-                p1,
-                p2,
-                result
-            });
-
-            // 清空資料準備下一局
-            players = {};
-
-            setTimeout(() => {
-
-                updateStatus();
-
-            }, 3000);
-
-        }
-
+    // 玩家設定名稱
+    socket.on("setName", (name) => {
+        socket.data.name = name;
     });
 
-    // 玩家離線
+    // 配對
+    socket.on("match", () => {
+
+        if (waitingPlayer === null) {
+
+            waitingPlayer = socket;
+            socket.emit("waiting");
+
+        } else {
+
+            const opponent = waitingPlayer;
+            waitingPlayer = null;
+
+            createRoom(opponent, socket);
+        }
+    });
+
+    // 投球（之後3D會用）
+    socket.on("throwBall", (data) => {
+
+        const roomId = Array.from(socket.rooms)[1];
+
+        if (!roomId) return;
+
+        io.to(roomId).emit("ballUpdate", {
+            id: socket.id,
+            data
+        });
+    });
+
+    // 離線
     socket.on("disconnect", () => {
 
-        console.log("玩家離線:", socket.id);
-
-        delete players[socket.id];
-
         onlinePlayers--;
-
-        if (onlinePlayers < 0) {
-            onlinePlayers = 0;
-        }
-
         io.emit("onlineCount", onlinePlayers);
 
-        updateStatus();
-
+        if (waitingPlayer === socket) {
+            waitingPlayer = null;
+        }
     });
 
 });
 
-const PORT = process.env.PORT || 3000;
-
-server.listen(PORT, () => {
-
-    console.log("伺服器啟動成功 Port:", PORT);
-
+server.listen(process.env.PORT || 3000, () => {
+    console.log("Server running");
 });
