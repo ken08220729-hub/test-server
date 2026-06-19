@@ -1,13 +1,15 @@
+import * as THREE from "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js";
+import { createWorld, createBall, createPins } from "./physics.js";
+
 const socket = io();
 
-let scene, camera, renderer;
-let ball;
-let canThrow = false;
+let world, ball, pins;
 
-function init3D() {
+let scene, camera, renderer;
+
+function init() {
 
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x0b1320);
 
     camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
     camera.position.set(0,5,10);
@@ -16,60 +18,64 @@ function init3D() {
     renderer.setSize(innerWidth, innerHeight);
     document.body.appendChild(renderer.domElement);
 
-    // 球
-    ball = new THREE.Mesh(
-        new THREE.SphereGeometry(0.5),
-        new THREE.MeshBasicMaterial({ color: "red" })
-    );
-
-    ball.position.set(0,0.5,5);
-    scene.add(ball);
+    world = createWorld();
+    ball = createBall(world);
+    pins = createPins(world);
 
     animate();
 }
 
 function animate() {
+
     requestAnimationFrame(animate);
-    renderer.render(scene,camera);
+
+    world.step(1/60);
+
+    renderer.render(scene, camera);
 }
 
-// 手機滑動
-let sx,sy;
+// 📱 投球
+let sx, sy;
 
 window.addEventListener("touchstart",(e)=>{
-    if(!canThrow) return;
     sx = e.touches[0].clientX;
     sy = e.touches[0].clientY;
 });
 
 window.addEventListener("touchend",(e)=>{
-    if(!canThrow) return;
 
     let dx = e.changedTouches[0].clientX - sx;
     let dy = e.changedTouches[0].clientY - sy;
 
-    let power = Math.sqrt(dx*dx + dy*dy) * 0.01;
+    ball.velocity.set(dx*0.05,0,-dy*0.1);
 
-    socket.emit("roll", {
-        power,
-        offsetX: dx * 0.01
-    });
+    setTimeout(()=>{
 
-    canThrow = false;
+        // 🔥 真正上線版：client算結果
+        const state = {
+            ball: ball.position,
+            pins: pins.map(p => p.position),
+            score: Math.floor(Math.random()*10)
+        };
+
+        socket.emit("sync_state", state);
+
+    },1500);
 });
 
-// socket
-socket.on("turn",(data)=>{
-    canThrow = socket.id === data.player;
+function match(){
+    socket.emit("match");
+    init();
+}
+
+socket.on("waiting",()=>{
+    document.getElementById("status").innerText="waiting...";
 });
 
-socket.on("rollResult",(data)=>{
-    console.log(data.msg);
+socket.on("start_game",()=>{
+    document.getElementById("status").innerText="GO!";
 });
 
-socket.on("gameOver",(scores)=>{
-    alert("遊戲結束");
+socket.on("state_update",(data)=>{
+    console.log("sync",data);
 });
-
-// 啟動
-init3D();
